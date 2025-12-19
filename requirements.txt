@@ -1,0 +1,40 @@
+# Web Framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+httpx==0.28.1
+python-multipart==0.0.21
+
+# Database
+sqlalchemy==2.0.25
+psycopg2-binary==2.9.9
+
+# Configuration & Validation
+python-dotenv==1.2.1
+pydantic==2.12.5
+pydantic-settings==2.1.0
+
+# AutoGen for multi-agent orchestration
+ag2==0.10.2
+autogen-agentchat==0.5.7
+autogen-core==0.5.7
+autogen-ext==0.5.7
+autogenstudio==0.4.2.2
+
+# OpenAI for LLM and embeddings
+openai==2.13.0
+
+# Observability - Phoenix for tracing agent activities
+arize-phoenix==12.25.1
+arize-phoenix-otel==0.14.0
+openinference-instrumentation-openai==0.1.41
+opentelemetry-api==1.39.1
+opentelemetry-sdk==1.39.1
+opentelemetry-exporter-otlp==1.39.1
+
+# Utilities
+numpy==2.3.5
+requests==2.32.5
+tiktoken==0.12.0
+
+# Frontend (optional - for Streamlit UI)
+streamlit==1.52.2

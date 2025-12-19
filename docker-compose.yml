@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: realestate-postgres
+    environment:
+      POSTGRES_DB: realestate_db
+      POSTGRES_USER: realestate_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin}
+      POSTGRES_INITDB_ARGS: "-E UTF8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U realestate_user -d realestate_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - realestate-network
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: realestate-backend
+    environment:
+      DATABASE_URL: postgresql://realestate_user:${POSTGRES_PASSWORD:-admin}@postgres:5432/realestate_db
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL_NAME: ${OPENAI_MODEL_NAME:-gpt-4o-mini}
+      PHOENIX_PROJECT_NAME: realestate-autogen
+      ALLOWED_ORIGINS: http://localhost:3000,http://localhost:8501,http://127.0.0.1:8081
+      LOG_LEVEL: INFO
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./app:/app/app
+      - ./app.log:/app/app.log
+    networks:
+      - realestate-network
+    restart: unless-stopped
+
+  # Streamlit Frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: realestate-frontend
+    environment:
+      BACKEND_URL: http://backend:8000
+    ports:
+      - "8501:8501"
+    depends_on:
+      - backend
+    networks:
+      - realestate-network
+    restart: unless-stopped
+
+  # Phoenix Observability (Optional)
+  phoenix:
+    image: arizephoenix/phoenix:latest
+    container_name: realestate-phoenix
+    ports:
+      - "6006:6006"
+      - "4317:4317"
+    environment:
+      PHOENIX_WORKING_DIR: /phoenix-data
+    volumes:
+      - phoenix_data:/phoenix-data
+    networks:
+      - realestate-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  phoenix_data:
+
+networks:
+  realestate-network:
+    driver: bridge

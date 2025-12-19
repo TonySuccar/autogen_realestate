@@ -1,0 +1,205 @@
+{
+  "provider": "autogen_agentchat.teams.SelectorGroupChat",
+  "component_type": "team",
+  "version": 1,
+  "component_version": 1,
+  "label": "RealEstateTeam_Fixed",
+  "description": "Multi-agent team: PropertyAgent (search) + BookingAgent (schedule) + FAQAgent (questions)",
+  "config": {
+    "model_client": {
+      "provider": "autogen_ext.models.openai.OpenAIChatCompletionClient",
+      "component_type": "model",
+      "version": 1,
+      "component_version": 1,
+      "label": "OpenAIChatCompletionClient",
+      "config": {
+        "model": "gpt-4o-mini",
+        "temperature": 0.1
+      }
+    },
+    "selector_prompt": "You are a routing assistant. Route based on user intent:\n\n**STEP 1 - PROPERTY SEARCH (Check FIRST):**\nDoes message request property listings or searches?\nKeywords: 'find', 'search', 'show', 'list', 'looking for', 'I want', 'dream home', 'properties in'\nIf YES → **PropertyAgent** (STOP)\n\n**STEP 2 - BOOKING:**\nDoes message say: 'book', 'schedule', 'arrange viewing', 'I want to see it'?\nIf YES → **BookingAgent** (STOP)\n\n**STEP 3 - QUESTIONS (Check LAST):**\nDoes message START WITH question words?\nKeywords: 'can', 'how', 'what', 'why', 'when', 'where', 'is', 'are', 'do', 'does', 'should'\nAND asks about: policies, rules, documents, requirements, legal, mortgage, deposit, insurance, process?\nIf YES → **FAQAgent**\n\n**CRITICAL EXAMPLES:**\n- 'list all properties' → PropertyAgent (SEARCH)\n- 'find me a house in LA' → PropertyAgent (SEARCH)\n- 'show me properties under 500k' → PropertyAgent (SEARCH)\n- 'can i view the same property twice?' → FAQAgent (QUESTION)\n- 'what documents do I need?' → FAQAgent (QUESTION)\n- 'book the luxury apartment' → BookingAgent (BOOKING)\n\nRespond ONLY with the agent name.",
+    "allow_repeated_speaker": true,
+    "participants": [
+      {
+        "provider": "autogen_agentchat.agents.AssistantAgent",
+        "component_type": "agent",
+        "version": 1,
+        "component_version": 1,
+        "label": "PropertyAgent",
+        "config": {
+          "name": "PropertyAgent",
+          "description": "Only searches for properties when user wants to find/search/buy a home. NOT for questions.",
+          "system_message": "You are PropertyAgent, a real estate property search specialist.\n\nONLY ACT if user wants to FIND/SEARCH properties (keywords: 'find', 'search', 'show me properties', 'looking to buy').\n\nWHEN user wants property search:\n1. IMMEDIATELY call search_properties() with appropriate filters\n2. DO NOT say anything after - tool results are the answer",
+          "tool_call_summary_format": "{result}",
+          "reflect_on_tool_use": false,
+          "model_client": {
+            "provider": "autogen_ext.models.openai.OpenAIChatCompletionClient",
+            "component_type": "model",
+            "version": 1,
+            "component_version": 1,
+            "label": "OpenAIChatCompletionClient",
+            "config": {
+              "model": "gpt-4o-mini",
+              "temperature": 0.1
+            }
+          },
+          "model_context": {
+            "provider": "autogen_core.model_context.UnboundedChatCompletionContext",
+            "component_type": "chat_completion_context",
+            "version": 1,
+            "component_version": 1,
+            "label": "UnboundedChatCompletionContext",
+            "config": {}
+          },
+          "tools": [
+            {
+              "provider": "autogen_core.tools.FunctionTool",
+              "component_type": "tool",
+              "version": 1,
+              "component_version": 1,
+              "label": "search_properties",
+              "config": {
+                "source_code": "def search_properties(city: str = None, min_price: float = None, max_price: float = None) -> str:\n    import requests\n    try:\n        params = {}\n        if city:\n            params['city'] = city\n        if min_price:\n            params['min_price'] = min_price\n        if max_price:\n            params['max_price'] = max_price\n        response = requests.get(\"http://127.0.0.1:8000/properties\", params=params, timeout=10)\n        if response.status_code != 200:\n            return f\"❌ API Error: {response.status_code}\"\n        properties = response.json()\n        if not properties:\n            return \"No properties found. Try different filters!\"\n        result = f\"🏡 **Found {len(properties)} properties:**\\n\\n\"\n        for idx, prop in enumerate(properties[:10], 1):\n            result += f\"{idx}. **{prop['title']}**\\n   📍 {prop['city']} | 💰 ${prop['price']:,.0f} | 📐 {prop.get('size_sqft', 0):,.0f} sqft\\n\\n\"\n        if len(properties) > 10:\n            result += f\"...and {len(properties) - 10} more!\\n\"\n        return result\n    except Exception as e:\n        return f\"❌ Error: {str(e)}\"",
+                "name": "search_properties",
+                "description": "Search available properties",
+                "global_imports": [],
+                "has_cancellation_support": false
+              }
+            }
+          ]
+        }
+      },
+      {
+        "provider": "autogen_agentchat.agents.AssistantAgent",
+        "component_type": "agent",
+        "version": 1,
+        "component_version": 1,
+        "label": "BookingAgent",
+        "config": {
+          "name": "BookingAgent",
+          "description": "Books property viewings",
+          "system_message": "You are BookingAgent, a property viewing scheduler.\n\nONLY ACT when user EXPLICITLY says: 'book', 'schedule', 'I want to see it', 'arrange viewing'\n\nYOU NEED: property name, date (YYYY-MM-DD), time (HH:MM in 24-hour)\n\nTIME CONVERSION: 8pm→20:00, 2pm→14:00, 9am→09:00\n\nWHEN user requests booking:\n- If you have all 3 things → call book_viewing(property_name, date, time)\n- If missing info → Ask ONCE for what's missing\n\nDO NOT say anything after tool executes - tool result is the answer.",
+          "tool_call_summary_format": "{result}",
+          "reflect_on_tool_use": false,
+          "model_client": {
+            "provider": "autogen_ext.models.openai.OpenAIChatCompletionClient",
+            "component_type": "model",
+            "version": 1,
+            "component_version": 1,
+            "label": "OpenAIChatCompletionClient",
+            "config": {
+              "model": "gpt-4o-mini",
+              "temperature": 0.1
+            }
+          },
+          "model_context": {
+            "provider": "autogen_core.model_context.UnboundedChatCompletionContext",
+            "component_type": "chat_completion_context",
+            "version": 1,
+            "component_version": 1,
+            "label": "UnboundedChatCompletionContext",
+            "config": {}
+          },
+          "tools": [
+            {
+              "provider": "autogen_core.tools.FunctionTool",
+              "component_type": "tool",
+              "version": 1,
+              "component_version": 1,
+              "label": "book_viewing",
+              "config": {
+                "source_code": "def book_viewing(property_name: str, date: str, time: str) -> str:\n    import requests\n    from datetime import datetime\n    try:\n        datetime_str = f\"{date} {time}\"\n        scheduled_at = datetime.strptime(datetime_str, \"%Y-%m-%d %H:%M\")\n        \n        # Find property by name\n        search_response = requests.get(\"http://127.0.0.1:8000/properties\", timeout=10)\n        if search_response.status_code != 200:\n            return f\"❌ Could not search properties: HTTP {search_response.status_code}\"\n        \n        properties = search_response.json()\n        matching_property = None\n        for prop in properties:\n            if property_name.lower() in prop['title'].lower():\n                matching_property = prop\n                break\n        \n        if not matching_property:\n            return f\"❌ Property '{property_name}' not found. Please check the name.\"\n        \n        # Create viewing (using POST to a viewings endpoint if you have one)\n        # For now, format success message\n        nice_date = scheduled_at.strftime(\"%A, %B %d, %Y\")\n        nice_time = scheduled_at.strftime(\"%I:%M %p\")\n        \n        return f\"✅ **Viewing Scheduled!**\\n\\n🏠 **{matching_property['title']}**\\n📍 {matching_property['city']}\\n💰 ${matching_property['price']:,.0f}\\n📅 {nice_date}\\n⏰ {nice_time}\\n\\nYour viewing has been confirmed!\"\n    except ValueError:\n        return f\"❌ Invalid date/time format. Use YYYY-MM-DD and HH:MM (24-hour format).\"\n    except Exception as e:\n        return f\"❌ Error: {str(e)}\"",
+                "name": "book_viewing",
+                "description": "Book a property viewing",
+                "global_imports": [],
+                "has_cancellation_support": false
+              }
+            }
+          ]
+        }
+      },
+      {
+        "provider": "autogen_agentchat.agents.AssistantAgent",
+        "component_type": "agent",
+        "version": 1,
+        "component_version": 1,
+        "label": "FAQAgent",
+        "config": {
+          "name": "FAQAgent",
+          "description": "Answers real estate questions",
+          "system_message": "You are FAQAgent, a real estate information specialist.\n\nWHEN user asks questions about real estate (buying, selling, mortgages, documents, legal, taxes):\n1. IMMEDIATELY call search_faq(query) with the user's question\n2. DO NOT say anything after the tool executes - the tool results are the answer\n\nLet the search results speak for themselves.",
+          "tool_call_summary_format": "{result}",
+          "reflect_on_tool_use": false,
+          "model_client": {
+            "provider": "autogen_ext.models.openai.OpenAIChatCompletionClient",
+            "component_type": "model",
+            "version": 1,
+            "component_version": 1,
+            "label": "OpenAIChatCompletionClient",
+            "config": {
+              "model": "gpt-4o-mini",
+              "temperature": 0.1
+            }
+          },
+          "model_context": {
+            "provider": "autogen_core.model_context.UnboundedChatCompletionContext",
+            "component_type": "chat_completion_context",
+            "version": 1,
+            "component_version": 1,
+            "label": "UnboundedChatCompletionContext",
+            "config": {}
+          },
+          "tools": [
+            {
+              "provider": "autogen_core.tools.FunctionTool",
+              "component_type": "tool",
+              "version": 1,
+              "component_version": 1,
+              "label": "search_faq",
+              "config": {
+                "source_code": "def search_faq(query: str, top_k: int = 3) -> str:\n    import requests\n    try:\n        response = requests.post(\n            \"http://127.0.0.1:8000/faq/search\",\n            json={\"query\": query, \"top_k\": top_k},\n            timeout=10\n        )\n        if response.status_code != 200:\n            return f\"❌ API Error: {response.status_code}\"\n        data = response.json()\n        results = data.get(\"results\", [])\n        if not results:\n            return \"No FAQ answers found.\"\n        \n        answer = f\"📚 **RAG Search Results** (Semantic Similarity)\\n\\n\"\n        for idx, item in enumerate(results, 1):\n            score = item.get('similarity_score', 0)\n            answer += f\"**Result {idx}** (Similarity: {score:.2%})\\n\"\n            answer += f\"**Q: {item['question']}**\\n\"\n            answer += f\"**A:** {item['answer']}\\n\\n\"\n        \n        answer += \"_Results ranked by semantic similarity using OpenAI embeddings_\"\n        return answer\n    except Exception as e:\n        return f\"❌ Error: {str(e)}\"",
+                "name": "search_faq",
+                "description": "Search FAQ database for real estate questions",
+                "global_imports": [],
+                "has_cancellation_support": false
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "termination_condition": {
+      "provider": "autogen_agentchat.base.OrTerminationCondition",
+      "component_type": "termination",
+      "version": 1,
+      "component_version": 1,
+      "label": "OrTerminationCondition",
+      "config": {
+        "conditions": [
+          {
+            "provider": "autogen_agentchat.conditions.TextMentionTermination",
+            "component_type": "termination",
+            "version": 1,
+            "component_version": 1,
+            "label": "TextMentionTermination",
+            "config": {
+              "text": "TERMINATE"
+            }
+          },
+          {
+            "provider": "autogen_agentchat.conditions.MaxMessageTermination",
+            "component_type": "termination",
+            "version": 1,
+            "component_version": 1,
+            "label": "MaxMessageTermination",
+            "config": {
+              "max_messages": 5,
+              "include_agent_event": false
+            }
+          }
+        ]
+      }
+    },
+    "emit_team_events": false
+  }
+}
