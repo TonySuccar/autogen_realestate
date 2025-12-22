@@ -9,6 +9,7 @@ from app.agents.booking_agent import BookingAgentAutogen
 from app.agents.faq_agent import FAQAgentAutogen
 from app.agents.autogen_config import get_llm_config
 from app.middleware.logging import logger
+from app.observability.phoenix_tracer import trace_agent_action
 
 
 class OrchestratorAgentAutogen:
@@ -44,7 +45,7 @@ class OrchestratorAgentAutogen:
                 self.faq_agent.agent
             ],
             messages=[],
-            max_round=15,  # Increased for better multi-turn conversations
+            max_round=3,  # Reduced for faster responses
             speaker_selection_method="auto",  # Let AutoGen decide who speaks
             allow_repeat_speaker=False,  # Prevent agents from monopolizing conversation
         )
@@ -68,29 +69,36 @@ class OrchestratorAgentAutogen:
             AI response from appropriate agent
         """
         try:
-            logger.info(f"Processing message with AutoGen: {user_message}")
-            logger.info(f"Current conversation history: {len(self.group_chat.messages)} messages")
-            
-            # Initiate chat with the user proxy
-            # Messages are automatically appended to group_chat.messages
-            self.user_proxy.initiate_chat(
-                self.manager,
+            with trace_agent_action(
+                "OrchestratorAgent", 
+                "group_chat",
                 message=user_message,
-                clear_history=False,  # CRITICAL: Preserve conversation history
-            )
-            
-            # Extract the final response from chat history
-            chat_history = self.group_chat.messages
-            
-            if len(chat_history) > 0:
-                # Get the last non-user message
-                for msg in reversed(chat_history):
-                    if msg.get("name") != "User":
-                        response = msg.get("content", "")
-                        logger.info(f"AutoGen response: {response[:100]}...")
-                        return response
-            
-            return "I apologize, but I couldn't process your request. Please try again."
+                conversation_length=len(self.group_chat.messages),
+                max_rounds=self.group_chat.max_round
+            ):
+                logger.info(f"Processing message with AutoGen: {user_message}")
+                logger.info(f"Current conversation history: {len(self.group_chat.messages)} messages")
+                
+                # Initiate chat with the user proxy
+                # Messages are automatically appended to group_chat.messages
+                self.user_proxy.initiate_chat(
+                    self.manager,
+                    message=user_message,
+                    clear_history=False,  # CRITICAL: Preserve conversation history
+                )
+                
+                # Extract the final response from chat history
+                chat_history = self.group_chat.messages
+                
+                if len(chat_history) > 0:
+                    # Get the last non-user message
+                    for msg in reversed(chat_history):
+                        if msg.get("name") != "User":
+                            response = msg.get("content", "")
+                            logger.info(f"AutoGen response: {response[:100]}...")
+                            return response
+                
+                return "I apologize, but I couldn't process your request. Please try again."
             
         except Exception as e:
             logger.error(f"Error in AutoGen orchestrator: {e}", exc_info=True)

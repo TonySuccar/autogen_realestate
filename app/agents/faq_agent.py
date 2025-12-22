@@ -7,6 +7,7 @@ from typing import Annotated
 from app.services.faq_service import search_faq_rag
 from app.agents.autogen_config import get_llm_config, get_agent_system_messages
 from app.middleware.logging import logger
+from app.observability.phoenix_tracer import trace_agent_action
 
 
 def search_faq_database(db: Session, query: str, top_k: int = 3) -> str:
@@ -22,26 +23,37 @@ def search_faq_database(db: Session, query: str, top_k: int = 3) -> str:
         Formatted FAQ answers
     """
     try:
-        results = search_faq_rag(db, query, top_k=top_k)
-        
-        if not results:
-            return "I couldn't find specific information about that in our FAQ database, but I'm happy to provide general guidance! What would you like to know?"
-        
-        response = f"📚 **Here's what I found:**\n\n"
-        
-        for idx, (faq, score) in enumerate(results, 1):
-            response += f"**Q: {faq.question}**\n"
-            response += f"A: {faq.answer}\n"
+        with trace_agent_action(
+            "FAQAgent",
+            "rag_semantic_search",
+            query=query,
+            top_k=top_k,
+            search_type="RAG"
+        ):
+            results = search_faq_rag(db, query, top_k=top_k)
             
-            if faq.category:
-                response += f"_Category: {faq.category}_\n"
+            if not results:
+                return "I couldn't find specific information about that in our FAQ database, but I'm happy to provide general guidance! What would you like to know?"
             
-            response += "\n"
-        
-        response += "\n💡 **Still have questions?** Feel free to ask for more details!"
-        
-        logger.info(f"Found {len(results)} FAQ matches for query: {query}")
-        return response
+            response = f"📚 **Here's what I found:**\n\n"
+            
+            for idx, result in enumerate(results, 1):
+                response += f"**Q: {result['question']}**\n"
+                response += f"A: {result['answer']}\n"
+                
+                # Show similarity score
+                similarity_pct = result.get('similarity_score', 0) * 100
+                response += f"_Relevance: {similarity_pct:.1f}%_\n"
+                
+                if result.get('tags'):
+                    response += f"_Tags: {', '.join(result['tags'])}_\n"
+                
+                response += "\n"
+            
+            response += "\n💡 **Still have questions?** Feel free to ask for more details!"
+            
+            logger.info(f"Found {len(results)} FAQ matches for query: {query}")
+            return response
         
     except Exception as e:
         logger.error(f"Error searching FAQs: {e}")
@@ -63,7 +75,7 @@ class FAQAgentAutogen:
             system_message=self.system_message,
             llm_config=get_llm_config(),
             human_input_mode="NEVER",
-            max_consecutive_auto_reply=5,
+            max_consecutive_auto_reply=2,  # Reduced for faster responses
         )
         
         # Create wrapper function with Annotated type hints - MUST capture self.db in closure
@@ -83,7 +95,7 @@ class FAQAgentAutogen:
         # Register tool using new AutoGen API
         self.agent.register_for_llm(
             name="search_faq_database",
-            description="Search the FAQ knowledge base for answers to real estate questions using semantic similarity"
+            description="MANDATORY: Search the FAQ database for EVERY question. Returns accurate answers from the knowledge base with similarity scores. You MUST call this before answering any question."
         )(search_faq_wrapper)
         
         # Register for execution

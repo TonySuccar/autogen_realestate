@@ -34,6 +34,7 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_MODEL_NAME: ${OPENAI_MODEL_NAME:-gpt-4o-mini}
       PHOENIX_PROJECT_NAME: realestate-autogen
+      PHOENIX_COLLECTOR_ENDPOINT: http://phoenix:6006
       ALLOWED_ORIGINS: http://localhost:3000,http://localhost:8501,http://127.0.0.1:8081
       LOG_LEVEL: INFO
     ports:
@@ -41,6 +42,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      phoenix:
+        condition: service_started
     volumes:
       - ./app:/app/app
       - ./app.log:/app/app.log
@@ -64,7 +67,7 @@ services:
       - realestate-network
     restart: unless-stopped
 
-  # Phoenix Observability (Optional)
+  # Phoenix Observability
   phoenix:
     image: arizephoenix/phoenix:latest
     container_name: realestate-phoenix
@@ -77,6 +80,12 @@ services:
       - phoenix_data:/phoenix-data
     networks:
       - realestate-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6006"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     restart: unless-stopped
 
 volumes:

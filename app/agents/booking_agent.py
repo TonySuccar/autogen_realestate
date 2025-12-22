@@ -10,6 +10,7 @@ from app.services.property_service import find_property_by_name
 from app.agents.autogen_config import get_llm_config, get_agent_system_messages
 from app.middleware.logging import logger
 from app.models.property import Property
+from app.observability.phoenix_tracer import trace_agent_action
 
 
 def create_property_viewing(
@@ -33,21 +34,27 @@ def create_property_viewing(
         Formatted confirmation message
     """
     try:
-        # Find property by name
-        property_obj = find_property_by_name(db, property_name)
-        
-        datetime_str = f"{date} {time}"
-        scheduled_at = datetime.strptime(datetime_str, "%Y-%m-%d %H:%M")
-        
-        viewing = create_viewing(db, property_obj.id, scheduled_at)
-        
-        # Format the datetime nicely
-        nice_date = scheduled_at.strftime("%A, %B %d, %Y")
-        nice_time = scheduled_at.strftime("%I:%M %p")
-        
-        return f"""✅ **Viewing Scheduled Successfully!**
-
-🏠 **Property:** {property_obj.title}
+        with trace_agent_action(
+            "BookingAgent",
+            "create_property_viewing",
+            property_name=property_name,
+            date=date,
+            time=time,
+            user_id=user_id
+        ):
+            # Find property by name
+            property_obj = find_property_by_name(db, property_name)
+            
+            datetime_str = f"{date} {time}"
+            scheduled_at = datetime.strptime(datetime_str, "%Y-%m-%d %H:%M")
+            
+            viewing = create_viewing(db, property_obj.id, scheduled_at)
+            
+            # Format the datetime nicely
+            nice_date = scheduled_at.strftime("%A, %B %d, %Y")
+            nice_time = scheduled_at.strftime("%I:%M %p")
+            
+            return f"""✅ **Viewing Scheduled Successfully!**
 📍 **Location:** {property_obj.city}
 📅 **Date:** {nice_date}
 ⏰ **Time:** {nice_time}
@@ -138,7 +145,7 @@ class BookingAgentAutogen:
             system_message=self.system_message,
             llm_config=get_llm_config(),
             human_input_mode="NEVER",
-            max_consecutive_auto_reply=5,
+            max_consecutive_auto_reply=2,  # Reduced for faster responses
         )
         
         # Register tools using new AutoGen API

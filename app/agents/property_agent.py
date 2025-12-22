@@ -7,6 +7,7 @@ from typing import Optional, Annotated
 from app.services.property_service import list_properties, get_property
 from app.agents.autogen_config import get_llm_config, get_agent_system_messages
 from app.middleware.logging import logger
+from app.observability.phoenix_tracer import trace_agent_action
 
 
 def search_properties(
@@ -28,13 +29,20 @@ def search_properties(
         Formatted string with property listings
     """
     try:
-        properties = list_properties(db, city=city, min_price=min_price, max_price=max_price)
-        
-        if not properties:
-            return "I couldn't find any properties matching your criteria. Try adjusting your search!"
-        
-        # Format results nicely
-        result_text = f"🏡 **Found {len(properties)} amazing properties!**\n\n"
+        with trace_agent_action(
+            "PropertyAgent",
+            "search_properties",
+            city=city,
+            min_price=min_price,
+            max_price=max_price
+        ):
+            properties = list_properties(db, city=city, min_price=min_price, max_price=max_price)
+            
+            if not properties:
+                return "I couldn't find any properties matching your criteria. Try adjusting your search!"
+            
+            # Format results nicely
+            result_text = f"🏡 **Found {len(properties)} amazing properties!**\n\n"
         
         for idx, prop in enumerate(properties[:10], 1):
             result_text += f"**{idx}. {prop.title}**\n"
@@ -73,21 +81,26 @@ def get_property_details(db: Session, property_id: int) -> str:
         Formatted property details string
     """
     try:
-        prop = get_property(db, property_id)
-        
-        details = f"🏠 **{prop.title}**\n\n"
-        details += f"📍 **Location:** {prop.city}\n"
-        details += f"💰 **Price:** ${prop.price:,.0f}\n"
-        details += f"📐 **Size:** {prop.size_sqft:,.0f} square feet\n\n"
-        
-        if prop.description:
-            details += f"**About this property:**\n{prop.description}\n\n"
-        
-        details += f"_Listed on: {prop.created_at.strftime('%B %d, %Y')}_\n\n"
-        details += f"💡 **Ready to schedule a viewing?** Just say something like:\n"
-        details += f"   'Book a viewing for {prop.title}'"
-        
-        return details
+        with trace_agent_action(
+            "PropertyAgent",
+            "get_property_details",
+            property_id=property_id
+        ):
+            prop = get_property(db, property_id)
+            
+            details = f"🏠 **{prop.title}**\n\n"
+            details += f"📍 **Location:** {prop.city}\n"
+            details += f"💰 **Price:** ${prop.price:,.0f}\n"
+            details += f"📐 **Size:** {prop.size_sqft:,.0f} square feet\n\n"
+            
+            if prop.description:
+                details += f"**About this property:**\n{prop.description}\n\n"
+            
+            details += f"_Listed on: {prop.created_at.strftime('%B %d, %Y')}_\n\n"
+            details += f"💡 **Ready to schedule a viewing?** Just say something like:\n"
+            details += f"   'Book a viewing for {prop.title}'"
+            
+            return details
         
     except ValueError:
         return f"I couldn't find a property with ID {property_id}. Please check the ID and try again!"
@@ -124,7 +137,7 @@ class PropertyAgentAutogen:
             system_message=self.system_message,
             llm_config=get_llm_config(),
             human_input_mode="NEVER",
-            max_consecutive_auto_reply=5,
+            max_consecutive_auto_reply=2,  # Reduced for faster responses
         )
         
         # Register tools using new AutoGen API

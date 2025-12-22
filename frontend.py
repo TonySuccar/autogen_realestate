@@ -36,7 +36,7 @@ with st.sidebar:
     - "find me properties in Los Angeles"
     - "what documents do I need to buy?"
     - "book luxury apartment for tomorrow 2pm"
-    - "can I view the same property twice?"
+    - "What are closing costs?"
     """)
     
     st.divider()
