@@ -18,4 +18,4 @@ class Viewing(Base):
     scheduled_at = Column(DateTime(timezone=True), nullable=False)
     status = Column(SQLEnum(ViewingStatus), default=ViewingStatus.SCHEDULED, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    

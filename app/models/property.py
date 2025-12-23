@@ -18,9 +18,6 @@ class Property(Base):
     price = Column(Float, nullable=False)
     size_sqft = Column(Float, nullable=True)
 
-    # Ownership
-    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-
     # Metadata
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 

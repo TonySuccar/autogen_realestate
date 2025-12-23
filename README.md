@@ -48,8 +48,8 @@ cp .env.example .env
 docker-compose up -d
 
 # 4. Initialize database (first time only)
-docker-compose exec backend python app/db/seed.py
-docker-compose exec backend python app/db/generate_faq_embeddings.py
+docker compose exec backend python -m app.db.seed
+docker compose exec backend python -m app.db.generate_faq_embeddings
 
 # Services will be available at:
 # - FastAPI Backend: http://localhost:8000

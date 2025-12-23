@@ -1,6 +1,10 @@
 import streamlit as st
 import requests
 import uuid
+import os
+
+BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:8000")
+
 
 # Page config
 st.set_page_config(page_title="Real Estate AI Assistant", page_icon="🏠", layout="wide")
@@ -47,7 +51,7 @@ with st.sidebar:
     if st.button("🔄 Clear Conversation"):
         # Clear session on backend
         try:
-            requests.delete(f"http://127.0.0.1:8000/session/{st.session_state.session_id}")
+            requests.delete(f"{BACKEND_URL}/session/{st.session_state.session_id}")
         except:
             pass
         # Reset frontend
@@ -72,15 +76,16 @@ if prompt := st.chat_input("Ask about properties, book a viewing, or ask questio
         message_placeholder = st.empty()
         message_placeholder.markdown("🤔 Thinking...")
         
-        try:
+        try: 
             response = requests.post(
-                "http://127.0.0.1:8000/agent/chat",
-                json={
-                    "message": prompt,
-                    "session_id": st.session_state.session_id
-                },
-                timeout=90  # Increased to 90 seconds
-            )
+            f"{BACKEND_URL}/agent/chat",
+            json={
+                "message": prompt,
+                "session_id": st.session_state.session_id
+            },
+            timeout=90
+        )
+
             
             if response.status_code == 200:
                 data = response.json()

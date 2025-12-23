@@ -28,7 +28,7 @@ def get_db() -> Generator:
 def init_db():
     """Create all tables (development only, use Alembic in production)."""
     # Import all models to ensure they're registered with Base
-    from app.models import User, Property, Viewing, FAQ
+    from app.models import Property, Viewing, FAQ
     Base.metadata.create_all(bind=engine)
 
 def check_db_connection() -> bool:

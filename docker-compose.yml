@@ -46,7 +46,6 @@ services:
         condition: service_started
     volumes:
       - ./app:/app/app
-      - ./app.log:/app/app.log
     networks:
       - realestate-network
     restart: unless-stopped

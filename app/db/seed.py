@@ -5,7 +5,6 @@ Creates sample data for development and testing
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from app.db.database import SessionLocal, engine, Base
-from app.models.user import User
 from app.models.property import Property
 from app.models.viewing import Viewing, ViewingStatus
 from app.models.faq import FAQ
@@ -21,7 +20,6 @@ def clear_all_data(db: Session):
         # Delete in reverse order of dependencies
         db.query(Viewing).delete()
         db.query(Property).delete()
-        db.query(User).delete()
         db.query(FAQ).delete()
         db.commit()
         logger.info("All existing data cleared")
@@ -31,29 +29,7 @@ def clear_all_data(db: Session):
         raise
 
 
-def create_users(db: Session, count: int = 10):
-    """Create sample users"""
-    logger.info(f"Creating {count} users...")
-    
-    users = []
-    names = ["John Smith", "Sarah Johnson", "Michael Brown", "Emily Davis", 
-             "David Wilson", "Emma Martinez", "James Anderson", "Olivia Taylor",
-             "Robert Thomas", "Sophia Garcia"]
-    
-    for i in range(count):
-        user = User(
-            name=names[i],
-            email=f"{names[i].lower().replace(' ', '.')}@example.com",
-        )
-        users.append(user)
-        db.add(user)
-    
-    db.commit()
-    logger.info(f"Created {count} users")
-    return users
-
-
-def create_properties(db: Session, users: list, count: int = 10):
+def create_properties(db: Session, count: int = 10):
     """Create sample properties"""
     logger.info(f"Creating {count} properties...")
     
@@ -94,7 +70,6 @@ def create_properties(db: Session, users: list, count: int = 10):
             city=cities[i],
             price=random.uniform(150000, 2000000),
             size_sqft=random.uniform(500, 3500),
-            owner_id=users[i].id
         )
         properties.append(property)
         db.add(property)
@@ -104,7 +79,7 @@ def create_properties(db: Session, users: list, count: int = 10):
     return properties
 
 
-def create_viewings(db: Session, users: list, properties: list, count: int = 10):
+def create_viewings(db: Session, properties: list, count: int = 10):
     """Create sample viewings"""
     logger.info(f"Creating {count} viewings...")
     
@@ -281,14 +256,12 @@ def seed_database():
         clear_all_data(db)
         
         # Create seed data
-        users = create_users(db, count=10)
-        properties = create_properties(db, users, count=10)
-        viewings = create_viewings(db, users, properties, count=10)
+        properties = create_properties(db,  count=10)
+        viewings = create_viewings(db,  properties, count=10)
         faqs = create_faqs(db, count=20)
         
         logger.info("=" * 60)
         logger.info("Database seeding completed successfully!")
-        logger.info(f"   - Users: {len(users)}")
         logger.info(f"   - Properties: {len(properties)}")
         logger.info(f"   - Viewings: {len(viewings)}")
         logger.info(f"   - FAQs: {len(faqs)}")
