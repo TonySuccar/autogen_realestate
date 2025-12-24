@@ -102,6 +102,7 @@ python run_phoenix.py
 
 **Terminal 3 - Streamlit (optional):**
 ```bash
+$env:BACKEND_URL="http://127.0.0.1:8000"
 streamlit run frontend.py
 # http://localhost:8501
 ```
@@ -409,10 +410,6 @@ realestate-autogen/
 - Check http://localhost:6006 is accessible
 - Verify PHOENIX_COLLECTOR_ENDPOINT in `.env` (default: http://localhost:6006)
 - No API key needed for local deployment
-
-## 📄 License
-
-MIT
 
 ## 👥 Contributors
 

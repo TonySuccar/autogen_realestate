@@ -32,7 +32,7 @@ opentelemetry-sdk==1.39.1
 opentelemetry-exporter-otlp==1.39.1
 
 # Utilities
-numpy==2.3.5
+numpy==2.2.6
 requests==2.32.5
 tiktoken==0.12.0
 

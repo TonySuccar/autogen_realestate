@@ -1,5 +1,5 @@
 # Multi-stage build for Python application
-FROM python:3.11-slim as base
+FROM python:3.10-slim as base
 
 # Set working directory
 WORKDIR /app
