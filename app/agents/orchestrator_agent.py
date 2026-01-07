@@ -24,7 +24,12 @@ class OrchestratorAgentAutogen:
         # Initialize specialized AutoGen agents
         logger.info("Initializing AutoGen agents...")
         self.property_agent = PropertyAgentAutogen(db)
-        self.booking_agent = BookingAgentAutogen(db)
+        
+        # Initialize group chat first (will be updated with reference later)
+        self.group_chat = None
+        
+        # Pass None for now, will update after group chat is created
+        self.booking_agent = BookingAgentAutogen(db, None)
         self.faq_agent = FAQAgentAutogen(db)
         
         # Create a user proxy agent to represent the user
@@ -49,6 +54,9 @@ class OrchestratorAgentAutogen:
             speaker_selection_method="auto",  # Let AutoGen decide who speaks
             allow_repeat_speaker=False,  # Prevent agents from monopolizing conversation
         )
+        
+        # Now update booking agent with group chat reference
+        self.booking_agent.group_chat = self.group_chat
         
         # Create manager to coordinate the group chat
         self.manager = GroupChatManager(
@@ -79,13 +87,29 @@ class OrchestratorAgentAutogen:
                 logger.info(f"Processing message with AutoGen: {user_message}")
                 logger.info(f"Current conversation history: {len(self.group_chat.messages)} messages")
                 
-                # Initiate chat with the user proxy
-                # Messages are automatically appended to group_chat.messages
-                self.user_proxy.initiate_chat(
-                    self.manager,
-                    message=user_message,
-                    clear_history=False,  # CRITICAL: Preserve conversation history
-                )
+                try:
+                    # Initiate chat with the user proxy
+                    # Messages are automatically appended to group_chat.messages
+                    self.user_proxy.initiate_chat(
+                        self.manager,
+                        message=user_message,
+                        clear_history=False,  # CRITICAL: Preserve conversation history
+                    )
+                except StopIteration as e:
+                    # Handle generator cleanup issues gracefully
+                    logger.warning(f"Generator stopped unexpectedly: {e}", exc_info=True)
+                    pass
+                except GeneratorExit as e:
+                    # Handle generator exit gracefully
+                    logger.warning(f"Generator exit detected: {e}", exc_info=True)
+                    pass
+                except RuntimeError as e:
+                    # Handle runtime errors from generator
+                    if "generator" in str(e).lower():
+                        logger.warning(f"Generator runtime error: {e}", exc_info=True)
+                        pass
+                    else:
+                        raise
                 
                 # Extract the final response from chat history
                 chat_history = self.group_chat.messages

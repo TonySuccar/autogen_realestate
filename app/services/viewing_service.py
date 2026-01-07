@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 from app.models.viewing import Viewing, ViewingStatus
 from app.models.property import Property
@@ -23,13 +23,41 @@ def create_viewing(
         Dictionary with viewing details
         
     Raises:
-        ValueError: If property doesn't exist
+        ValueError: If property doesn't exist or viewing conflicts with existing bookings
     """
     try:
         # Check if property exists
         property_exists = db.query(Property).filter(Property.id == property_id).first()
         if not property_exists:
             raise ValueError(f"Property with ID {property_id} does not exist")
+        
+        # Check for overlapping viewings (must have at least 1 hour gap)
+        min_gap = timedelta(hours=1)
+        time_range_start = scheduled_at - min_gap
+        time_range_end = scheduled_at + min_gap
+        
+        conflicting_viewings = db.query(Viewing).filter(
+            Viewing.property_id == property_id,
+            Viewing.status == ViewingStatus.SCHEDULED,
+            Viewing.scheduled_at >= time_range_start,
+            Viewing.scheduled_at <= time_range_end
+        ).all()
+        
+        if conflicting_viewings:
+            # Format conflict information with property name
+            conflicts = []
+            for v in conflicting_viewings:
+                time_str = v.scheduled_at.strftime('%B %d, %Y at %I:%M %p')
+                conflicts.append(time_str)
+            
+            # Get property name for better error message
+            property_name = property_exists.title
+            conflict_list = ', '.join(conflicts)
+            raise ValueError(
+                f"Cannot book '{property_name}' at this time. "
+                f"There's already a viewing scheduled at: {conflict_list}. "
+                f"Please choose a time at least 1 hour before or after."
+            )
         
         # Create new viewing
         viewing = Viewing(
@@ -49,8 +77,7 @@ def create_viewing(
             "property_id": viewing.property_id,
             "scheduled_at": viewing.scheduled_at,
             "status": viewing.status.value,
-            "created_at": viewing.created_at,
-            "updated_at": viewing.updated_at
+            "created_at": viewing.created_at
         }
     except ValueError:
         raise
